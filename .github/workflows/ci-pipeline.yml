@@ -1,0 +1,83 @@
+name: CI Pipeline - ML Training & Docker Build
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'MLProject/**'
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  train-and-deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Set up Python 3.12
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12.7'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pandas==2.2.3 numpy==1.26.4 scikit-learn==1.5.2 \
+                    mlflow==2.19.0 matplotlib==3.9.2 seaborn==0.13.2
+    
+    - name: Run ML Training
+      working-directory: MLProject
+      run: python modelling.py
+    
+    - name: Verify artifacts
+      run: |
+        echo "=== Checking MLflow artifacts ==="
+        ls -la MLProject/mlruns/ || echo "MLflow runs directory"
+        find MLProject/mlruns -name "*.pkl" -o -name "*.json" -o -name "*.png" 2>/dev/null | head -20
+    
+    - name: Upload ML artifacts to GitHub
+      uses: actions/upload-artifact@v4
+      with:
+        name: ml-model-artifacts
+        path: MLProject/mlruns/
+        retention-days: 90
+    
+    - name: Commit artifacts to repository
+      run: |
+        git config --local user.email "github-actions[bot]@users.noreply.github.com"
+        git config --local user.name "github-actions[bot]"
+        git add -f MLProject/mlruns/ || true
+        git diff --staged --quiet || git commit -m "Auto-update ML artifacts [skip ci]"
+        git push || echo "Nothing to push"
+    
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    
+    - name: Login to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+    
+    - name: Build and Push Docker Image
+      uses: docker/build-push-action@v5
+      with:
+        context: ./MLProject
+        file: ./MLProject/Dockerfile
+        push: true
+        tags: |
+          ${{ secrets.DOCKERHUB_USERNAME }}/breast-cancer-ml:latest
+          ${{ secrets.DOCKERHUB_USERNAME }}/breast-cancer-ml:${{ github.sha }}
+    
+    - name: Pipeline Summary
+      run: |
+        echo "=============================================="
+        echo "CI PIPELINE COMPLETED SUCCESSFULLY"
+        echo "=============================================="
+        echo "Model trained with hyperparameter tuning"
+        echo "Artifacts uploaded to GitHub"
+        echo "Docker image pushed to Docker Hub"
+        echo "=============================================="
