@@ -25,12 +25,11 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install pandas==2.2.3 numpy==1.26.4 scikit-learn==1.5.2 \
-                    mlflow==2.19.0 matplotlib==3.9.2 seaborn==0.13.2
+        pip install mlflow==2.19.0 pandas==2.2.3 numpy==1.26.4 scikit-learn==1.5.2 matplotlib==3.9.2 seaborn==0.13.2
     
-    - name: Run ML Training
-      working-directory: MLProject
-      run: python modelling.py
+    - name: Run MLflow Project
+      run: |
+        mlflow run MLProject --env-manager=local
     
     - name: Verify artifacts
       run: |
@@ -77,7 +76,7 @@ jobs:
         echo "=============================================="
         echo "CI PIPELINE COMPLETED SUCCESSFULLY"
         echo "=============================================="
-        echo "Model trained with hyperparameter tuning"
+        echo "Model trained via MLflow Project"
         echo "Artifacts uploaded to GitHub"
         echo "Docker image pushed to Docker Hub"
         echo "=============================================="
